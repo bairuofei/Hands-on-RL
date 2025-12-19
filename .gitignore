@@ -4,3 +4,15 @@ __pycache__
 
 
 videos
+
+# examples
+
+
+**/tb_log/
+
+**/__pycache__/
+**/archive/
+
+ma-gym
+
+.history
