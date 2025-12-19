@@ -101,7 +101,7 @@
   <worldbody>
   <body name="base_link" childclass="galaxea_base" gravcomp="1">
     <!-- <freejoint name="base_joint"/> -->
-      <joint name="base_x" type="slide" axis="1 0 0"/>
+    <joint name="base_x" type="slide" axis="1 0 0"/>
     <joint name="base_y" type="slide" axis="0 1 0"/>
     <joint name="base_yaw" type="hinge" axis="0 0 1"/>
     <geom type="mesh" mesh="base_link"/>

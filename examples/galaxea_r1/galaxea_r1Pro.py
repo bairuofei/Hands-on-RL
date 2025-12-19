@@ -33,11 +33,11 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
-        xml_file: str = "/home/ruofei/code/learning/Hands-on-RL/examples/galaxea_r1/galaxea_r1pro/r1_pro.xml",
+        xml_file: str = "/home/ruofei/code/learning/Hands-on-RL/examples/galaxea_r1/galaxea_r1pro_simple/r1_pro.xml",
         frame_skip: int = 5,
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
-        forward_reward_weight: float = 1.25,
-        ctrl_cost_weight: float = 0.1,
+        forward_reward_weight: float = 50,  # previous 1.25
+        ctrl_cost_weight: float = 0.05,
         contact_cost_weight: float = 5e-7,
         contact_cost_range: Tuple[float, float] = (-np.inf, 10.0),
         healthy_reward: float = 5.0,
@@ -106,7 +106,7 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
             "render_fps": int(np.round(1.0 / self.dt)),
         }
 
-        obs_size = self.data.qpos.size + self.data.qvel.size + self.data.xipos.size - 3
+        obs_size = 3 + self.data.qpos.size + self.data.qvel.size + self.data.xipos.size - 3
         obs_size += self.data.cinert[1:].size * include_cinert_in_observation
         obs_size += self.data.cvel[1:].size * include_cvel_in_observation
         obs_size += (self.data.qvel.size) * include_qfrc_actuator_in_observation
@@ -117,6 +117,7 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
         )
 
         self.observation_structure = {
+            "target_xyz": 3,
             "qpos": self.data.qpos.size,
             "qvel": self.data.qvel.size,
             "body_pos": self.data.xipos.size - 3,
@@ -127,6 +128,13 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
             "ten_length": 0,
             "ten_velocity": 0,
         }
+        
+        self.target_range = 2.0
+        self.rng = np.random.default_rng(seed = 12) 
+        # generate new target xyz
+        self.target_xyz = self.rng.uniform(low=-self.target_range, high=self.target_range, size=3)
+        self.target_xyz[2] = 1.2  # 保持在地面
+        self.target_tolerance = 0.2  # 目标点容忍范围
 
     @property
     def is_healthy(self):
@@ -141,6 +149,7 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
         return min_z < self.data.xipos[11][2] < max_z
 
     def _get_obs(self):
+        target_xyz = self.target_xyz - self.data.xipos[25]
         position = self.data.qpos.flatten()
         velocity = self.data.qvel.flatten()
         body_pos = self.data.xipos[1:].flatten()  # 去掉第一个，是全局位置
@@ -164,7 +173,8 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
             external_contact_forces = np.array([])
             
         return np.concatenate(
-            (
+            (   
+                target_xyz,
                 position,
                 velocity,
                 body_pos,
@@ -193,7 +203,11 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
             low=noise_low, high=noise_high, size=self.model.nv
         )
         self.set_state(qpos, qvel)
-
+        
+        # generate new target xyz
+        self.target_xyz = self.rng.uniform(low=-self.target_range, high=self.target_range, size=3)
+        self.target_xyz[2] = 1.2  # 保持在地面
+        
         observation = self._get_obs()
         return observation
 
@@ -218,7 +232,11 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
         
         observation = self._get_obs()
         reward, reward_info = self._get_rew(x_pos_velocity, x_velocity, action)
-        terminated = (not self.is_healthy) and self._terminate_when_unhealthy
+        dist = np.linalg.norm(self.data.xipos[25] - self.target_xyz, ord=2)
+        terminated = False
+        if ((not self.is_healthy) and self._terminate_when_unhealthy) or dist > 5.0:
+            terminated = True
+        # terminated = (not self.is_healthy) and self._terminate_when_unhealthy
         info = {
             "tendon_length": self.data.ten_length,
             "tendon_velocity": self.data.ten_velocity,
@@ -243,20 +261,31 @@ class Galaxea_r1Pro(MujocoEnv, utils.EzPickle):
         contact_cost = np.clip(contact_cost, min_cost, max_cost)
         return contact_cost
     
+    def get_target_reward(self):
+        dist = np.linalg.norm(self.data.xipos[25] - self.target_xyz, ord=2)
+        target_reward = (np.exp(-dist) - 1) * 10
+        if dist < self.target_tolerance:
+            target_reward = 15.0  
+        return target_reward
+    
     def _get_rew(self, x_pos_velocity: float, x_velocity: float, action):
-        healthy_reward = self.get_healthy_reward()
-        control_cost = self._ctrl_cost_weight * np.sum(np.square(self.data.ctrl))
-        contact_cost = self.get_contact_cost()
+        healthy_reward = self.get_healthy_reward()   # reward: [0, 5]
+        forward_reward = np.clip(self._forward_reward_weight * x_pos_velocity, -10, 10)
+        forward_reward = 0
         
-        forward_reward = self._forward_reward_weight * x_pos_velocity
+        control_cost = np.clip(self._ctrl_cost_weight * np.sum(np.square(self.data.ctrl)), 0, 10)  # reward: (-inf, 0]
+        contact_cost = self.get_contact_cost()     # (-np.inf, 10.0)
+        
+        target_reward = self.get_target_reward()  # [-10, 15]
 
-        reward = forward_reward + healthy_reward - control_cost - contact_cost
+        reward = forward_reward + healthy_reward +target_reward - control_cost - contact_cost
 
         reward_info = {
             "reward_survive": healthy_reward,
             "reward_forward": forward_reward,
             "reward_ctrl": -control_cost,
             "reward_contact": -contact_cost,
+            "reward_target": target_reward,
         }
 
         return reward, reward_info

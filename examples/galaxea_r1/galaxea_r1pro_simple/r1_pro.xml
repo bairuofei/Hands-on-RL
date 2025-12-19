@@ -46,15 +46,7 @@
     </default>
   </default>
 
-  <default>
-    <default class="base_servo">
-      <joint pos="0 0 0" axis="0 0 -1" range="-1.66 1.66" damping="2"/>
-      <position ctrlrange="-1.66 1.66" kp="10" kv="1"/>
-    </default>
-    <default class="base_wheel">
-      <velocity ctrlrange="-15 15" kv="1"/>
-    </default>
-  </default>
+
 
   <asset>
     <mesh name="base_link" file="meshes/base_link.obj"/>
@@ -321,13 +313,36 @@
     <position name="torso_actuator_4" joint="torso_joint4" ctrlrange="-0.1745 3.1416" kp="5000" kv="500" />
   </actuator> -->
 
+
+  <default>
+    <default class="base_servo">
+      <joint pos="0 0 0" axis="0 0 -1" range="-1.66 1.66" damping="2"/>
+      <position ctrlrange="-1.66 1.66" kp="10" kv="1"/>
+    </default>
+    <default class="base_wheel">
+      <velocity ctrlrange="-15 15" kv="1"/>
+    </default>
+
+    <default class="base_yaw_controller">
+        <velocity ctrlrange="-5 5" kv="10" ctrllimited="true" />
+    </default>
+    <default class="base_xy_controller">
+        <velocity ctrlrange="-10 10" kv="2000" ctrllimited="true" />
+    </default>
+  </default>
+
+
   <actuator>
-    <position name="steer_motor_joint1" joint="steer_motor_joint1" class="base_servo"/>
+    <!-- <position name="steer_motor_joint1" joint="steer_motor_joint1" class="base_servo"/>
     <position name="steer_motor_joint2" joint="steer_motor_joint2" class="base_servo"/>
     <position name="steer_motor_joint3" joint="steer_motor_joint3" class="base_servo"/>
     <velocity name="wheel_motor_joint1" joint="wheel_motor_joint1" class="base_wheel"/>
     <velocity name="wheel_motor_joint2" joint="wheel_motor_joint2" class="base_wheel"/>
-    <velocity name="wheel_motor_joint3" joint="wheel_motor_joint3" class="base_wheel"/>
+    <velocity name="wheel_motor_joint3" joint="wheel_motor_joint3" class="base_wheel"/> -->
+
+    <position name="base_x" joint="base_x" class="base_xy_controller"/>
+    <position name="base_y" joint="base_y" class="base_xy_controller"/>
+    <position name="base_yaw" joint="base_yaw" class="base_yaw_controller"/>
     <position class="arm" name="left_arm_joint1" joint="left_arm_joint1" ctrlrange="-4.4506 1.309" kp="300" kv="40" />
     <position class="arm" name="left_arm_joint2" joint="left_arm_joint2" ctrlrange="-0.1745 3.1416" kp="300" kv="20" />
     <position class="arm" name="left_arm_joint3" joint="left_arm_joint3" ctrlrange="-2.3562 2.3562" kp="200" kv="5" />
